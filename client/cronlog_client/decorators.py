@@ -3,6 +3,10 @@ from functools import wraps
 from cronlog_client import CronLogClient
 from cronlog_client.states import CronState
 
+from django.db import connection, reset_queries
+
+connection.force_debug_cursor = True
+
 def log_cron_status(command_name):
     '''
     :param command_name: name of the cron job that needs to logged
@@ -38,8 +42,12 @@ def log_cls_cron_status(command_name):
         @wraps(f)
         def wrapper(self, *args, **kwargs):
             CronLogClient.log(command_name, CronState.CRON_STARTED)
+            reset_queries()
             val = f(self, *args, **kwargs)
-            CronLogClient.log(command_name, CronState.CRON_FINISHED)
+            context = {}
+            context['queries'] = connection.queries
+            CronLogClient.log(command_name, CronState.CRON_FINISHED,
+                    context=context)
             return val
         return wrapper
     return decorator
